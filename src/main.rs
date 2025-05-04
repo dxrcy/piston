@@ -1,6 +1,11 @@
-use std::{fmt, ops};
+use std::fmt;
+use std::io::{self, Write as _};
+use std::ops;
 
-fn main() {
+use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use crossterm::{cursor, execute, terminal};
+
+fn main() -> io::Result<()> {
     let mut grid = Grid::new(10, 10);
     grid[(5, 3)] = Tile::Piston(Direction::Right);
     grid[(6, 3)] = Tile::Stone;
@@ -14,12 +19,31 @@ fn main() {
 
     grid[(3, 5)] = Tile::Bedrock;
 
+    terminal::enable_raw_mode()?;
+
+    let mut stdout = io::stdout();
     loop {
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        print!("\x1b[2J\x1b[;H");
-        grid.draw();
+        grid.draw(&mut stdout)?;
         grid.tick();
+
+        match event::read()? {
+            Event::Key(event) => match (event.modifiers, event.code) {
+                (KeyModifiers::NONE, KeyCode::Char('h')) => {
+                    //
+                }
+                (KeyModifiers::NONE, KeyCode::Char('q'))
+                | (KeyModifiers::NONE, KeyCode::Esc)
+                | (KeyModifiers::CONTROL, KeyCode::Char('c')) => {
+                    break;
+                }
+                _ => (),
+            },
+            _ => (),
+        }
     }
+
+    terminal::disable_raw_mode()?;
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -106,28 +130,42 @@ impl Grid {
         }
     }
 
-    pub fn draw(&self) {
-        println!();
-        print!("{}", Tile::Empty);
+    pub fn draw(&self, stdout: &mut io::Stdout) -> io::Result<()> {
+        let origin = Coord::from((1, 1));
+
+        execute!(
+            stdout,
+            terminal::Clear(terminal::ClearType::All),
+            cursor::MoveTo(origin.x as u16, origin.y as u16),
+        )?;
         for _ in 0..self.width + 2 {
             print!("{}", Tile::Bedrock);
         }
-        println!();
 
         for y in 0..self.height {
-            print!("{}{}", Tile::Empty, Tile::Bedrock);
+            execute!(
+                stdout,
+                cursor::MoveTo(origin.x as u16, origin.y as u16 + y as u16 + 1)
+            )?;
+
+            print!("{}", Tile::Bedrock);
             for x in 0..self.width {
                 print!("{}", self[(x, y)]);
             }
-            println!("{}", Tile::Bedrock);
+            print!("{}", Tile::Bedrock);
         }
 
-        print!("{}", Tile::Empty);
+        execute!(
+            stdout,
+            cursor::MoveTo(origin.x as u16, origin.y as u16 + self.height as u16 + 1),
+        )?;
         for _ in 0..self.width + 2 {
             print!("{}", Tile::Bedrock);
         }
-        println!();
-        println!();
+
+        println!("\r"); // Also flushes
+
+        Ok(())
     }
 
     fn get_index(&self, x: usize, y: usize) -> usize {
