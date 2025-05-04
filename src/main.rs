@@ -24,13 +24,16 @@ fn main() -> io::Result<()> {
     let mut stdout = io::stdout();
     loop {
         grid.draw(&mut stdout)?;
-        grid.tick();
 
         match event::read()? {
             Event::Key(event) => match (event.modifiers, event.code) {
-                (KeyModifiers::NONE, KeyCode::Char('h')) => {
-                    //
-                }
+                (KeyModifiers::NONE, KeyCode::Char('h')) => grid.step(Direction::Left),
+                (KeyModifiers::NONE, KeyCode::Char('j')) => grid.step(Direction::Down),
+                (KeyModifiers::NONE, KeyCode::Char('k')) => grid.step(Direction::Up),
+                (KeyModifiers::NONE, KeyCode::Char('l')) => grid.step(Direction::Right),
+
+                (KeyModifiers::NONE, KeyCode::Char(' ')) => grid.tick(),
+
                 (KeyModifiers::NONE, KeyCode::Char('q'))
                 | (KeyModifiers::NONE, KeyCode::Esc)
                 | (KeyModifiers::CONTROL, KeyCode::Char('c')) => {
@@ -51,6 +54,7 @@ struct Grid {
     width: usize,
     height: usize,
     tiles: Vec<Tile>,
+    cursor: Coord,
 }
 
 impl Grid {
@@ -59,6 +63,7 @@ impl Grid {
             width,
             height,
             tiles: [Tile::Empty].repeat(width * height),
+            cursor: Coord::from((0, 0)),
         }
     }
 
@@ -82,6 +87,13 @@ impl Grid {
             if self[end].is_empty() {
                 return Some(end);
             }
+        }
+    }
+
+    pub fn step(&mut self, direction: Direction) {
+        let cursor = self.cursor + Coord::from_direction(1, direction);
+        if self.contains(cursor) {
+            self.cursor = cursor;
         }
     }
 
@@ -150,6 +162,23 @@ impl Grid {
 
             print!("{}", Tile::Bedrock);
             for x in 0..self.width {
+                let coord = Coord::from((x, y));
+
+                if self[(x, y)].is_empty() {
+                    if self.cursor == coord + (1, 0).into() {
+                        print!(" 🭵");
+                    } else if self.cursor == coord + (-1, 0).into() {
+                        print!("🭰 ");
+                    } else if self.cursor == coord + (0, 1).into() {
+                        print!("🭻🭻");
+                    } else if self.cursor == coord + (0, -1).into() {
+                        print!("🭶🭶");
+                    } else {
+                        print!("{}", self[(x, y)]);
+                    }
+                    continue;
+                }
+
                 print!("{}", self[(x, y)]);
             }
             print!("{}", Tile::Bedrock);
